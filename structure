@@ -1,0 +1,33 @@
+sneaklim/  
+│
+├── LICENSE  
+├── README.md  
+├── requirements.txt  
+├── setup.py  
+│
+├── sneaklim/  
+│   ├── __init__.py  
+│   ├── core/  
+│   │   ├── __init__.py  
+│   │   ├── scanner.py        # Network scanning & device discovery  
+│   │   ├── limiter.py        # Bandwidth control (throttling/shaping)  
+│   │   ├── analyzer.py       # Traffic analysis & AI (future)  
+│   │   └── firewall.py       # Rule-based blocking (optional)  
+│   │
+│   ├── cli/  
+│   │   ├── __init__.py  
+│   │   └── interface.py      # Command-line interface  
+│   │
+│   ├── utils/  
+│   │   ├── __init__.py  
+│   │   ├── helpers.py        # IP/MAC parsing, logging  
+│   │   └── constants.py      # Default values, configs  
+│   │
+│   └── tests/                # Unit & integration tests  
+│       ├── __init__.py  
+│       ├── test_scanner.py  
+│       └── test_limiter.py  
+│
+└── examples/                # Example usage scripts  
+    ├── basic_scan.py  
+    └── throttle_device.py  
