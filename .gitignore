@@ -1,2 +1,4 @@
 handshake/
 .structure
+.main.sh
+.setup.py
