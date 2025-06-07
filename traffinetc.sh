@@ -9,7 +9,6 @@ BRIGHT_PURPLE='\033[1;35m'
 NC='\033[0m' # No Color
 
 
-
 os=$(uname)
 homepath=$(echo ~)
 user=$(who | cut -d ' ' -f1 | sort | uniq)
