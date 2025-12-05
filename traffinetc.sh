@@ -129,9 +129,7 @@ function startAttacking() {
 
 
 
-
     gum style --foreground 212 "  starting handshake capture process..."
-    gum input --placeholder " press Enter to begin..." >/dev/null
     getHandshake "$targetBSSID" "$targetChannel"
 
 
@@ -172,7 +170,24 @@ function aircrack_start() {
 function check_monitor_mode_support() {
 
     attack_kind=("Deauthentication attack" "Wps / wps2 crack" "Get handshake file")
-    current_attack=$(printf "%s\n" "${attack_kind[@]}" | gum choose --header="  Choose Attack Type")
+
+
+
+    current_attack=$(printf "%s\n" "${attack_kind[@]}" | gum choose \
+        --header="  Choose Attack Type" \
+        --cursor="  *" \
+        --selected.foreground="255" \
+        --selected.background="63" \
+        --selected.bold \
+        --cursor.background="63" \
+        --cursor.foreground="255" \
+        --cursor.bold)
+
+    
+
+
+
+
     
     interfaces=$(iw dev | awk '$1=="Interface"{print $2}')
     interface_result=$(echo "$interfaces" | gum choose --header="  choose which monitor")
@@ -239,6 +254,16 @@ function checkRoot () {
 #         exit 1
 #     fi
 # }
+
+
+
+
+
+
+
+
+
+
 
 
 
